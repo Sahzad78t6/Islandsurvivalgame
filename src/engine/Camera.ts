@@ -16,9 +16,22 @@ export class Camera {
   private shakeIntensity: number = 0;
   public shakeOffset: Vector2 = new Vector2(0, 0);
 
+  public baseZoom: number = 1.0;
+
   constructor(viewportWidth: number = 1280, viewportHeight: number = 720) {
+    this.updateViewport(viewportWidth, viewportHeight);
+  }
+
+  public updateViewport(viewportWidth: number, viewportHeight: number) {
     this.viewportWidth = viewportWidth;
     this.viewportHeight = viewportHeight;
+
+    // Adaptive zoom: ensures adequate field of view on mobile (360px) up to 4K desktop
+    const minDim = Math.min(viewportWidth, viewportHeight);
+    const targetMinDim = 460; // target world units visible along shorter screen axis
+    const calculatedZoom = clamp(minDim / targetMinDim, 0.75, 1.25);
+    this.zoom = calculatedZoom;
+    this.baseZoom = calculatedZoom;
   }
 
   public setBounds(minX: number, minY: number, maxX: number, maxY: number) {

@@ -78,6 +78,7 @@ export class GameEngine {
     this.multiplayer = new MultiplayerManager();
 
     this.mobileControls = new MobileControls();
+    domOverlay.mobileControls = this.mobileControls;
     this.mobileControls.onAttack = () => {
       if (this.state === 'PLAYING') this.handlePlayerActionClick();
     };
@@ -94,14 +95,14 @@ export class GameEngine {
     this.mobileControls.onInventory = () => {
       if (this.state === 'PLAYING') this.toggleInventory();
     };
-    this.mobileControls.onToggleOrientation = () => {
-      this.manualForceLandscape = this.manualForceLandscape === null ? !this.isForcedLandscape : !this.manualForceLandscape;
-      this.applyOrientationLayout();
+    this.mobileControls.onFullscreenToggle = () => {
+      this.toggleFullscreen();
     };
 
     this.setupResize();
     this.setupInputs();
     this.setupOverlayEvents();
+    this.setupVisibilityHandler();
 
     const save = SaveSystem.load();
     if (!save.username) {
@@ -114,47 +115,73 @@ export class GameEngine {
     requestAnimationFrame((t) => this.gameLoop(t));
   }
 
-  public getScreenCoords(clientX: number, clientY: number): { x: number; y: number } {
-    if (this.isForcedLandscape) {
-      return {
-        x: clientY,
-        y: window.innerWidth - clientX
-      };
-    }
-    return { x: clientX, y: clientY };
+  public getCanvasCoords(clientX: number, clientY: number): { x: number; y: number } {
+    const rect = this.canvas.getBoundingClientRect();
+    return {
+      x: clientX - rect.left,
+      y: clientY - rect.top
+    };
   }
 
-  public applyOrientationLayout() {
-    const isPortrait = window.innerHeight > window.innerWidth;
-    const shouldForce = this.manualForceLandscape !== null ? this.manualForceLandscape : isPortrait;
-    this.isForcedLandscape = shouldForce;
-
-    const appEl = document.getElementById('app');
-    if (this.isForcedLandscape) {
-      appEl?.classList.add('forced-landscape');
-      const w = window.innerHeight;
-      const h = window.innerWidth;
-      this.canvas.width = w;
-      this.canvas.height = h;
-      this.camera.viewportWidth = w;
-      this.camera.viewportHeight = h;
-    } else {
-      appEl?.classList.remove('forced-landscape');
-      this.canvas.width = window.innerWidth;
-      this.canvas.height = window.innerHeight;
-      this.camera.viewportWidth = window.innerWidth;
-      this.camera.viewportHeight = window.innerHeight;
+  public async toggleFullscreen() {
+    try {
+      if (!document.fullscreenElement) {
+        if (document.documentElement.requestFullscreen) {
+          await document.documentElement.requestFullscreen();
+        }
+        if (screen.orientation && 'lock' in screen.orientation) {
+          await (screen.orientation as any).lock('landscape').catch(() => {});
+        }
+      } else {
+        if (document.exitFullscreen) {
+          await document.exitFullscreen();
+        }
+      }
+    } catch (err) {
+      console.log('Fullscreen toggle notification:', err);
     }
-    this.mobileControls.setForcedLandscape(this.isForcedLandscape);
   }
 
   private setupResize() {
-    const resize = () => {
-      this.applyOrientationLayout();
+    let resizeFrameId: number | null = null;
+    const performResize = () => {
+      resizeFrameId = null;
+      // Get CSS viewport dimensions
+      const cssW = window.visualViewport ? Math.round(window.visualViewport.width) : window.innerWidth;
+      const cssH = window.visualViewport ? Math.round(window.visualViewport.height) : window.innerHeight;
+      const dpr = Math.min(window.devicePixelRatio || 1, 2);
+
+      this.canvas.width = Math.round(cssW * dpr);
+      this.canvas.height = Math.round(cssH * dpr);
+      this.canvas.style.width = `${cssW}px`;
+      this.canvas.style.height = `${cssH}px`;
+
+      this.camera.updateViewport(cssW, cssH);
     };
-    window.addEventListener('resize', resize);
-    window.addEventListener('orientationchange', resize);
-    this.applyOrientationLayout();
+
+    const queueResize = () => {
+      if (resizeFrameId !== null) cancelAnimationFrame(resizeFrameId);
+      resizeFrameId = requestAnimationFrame(performResize);
+    };
+
+    window.addEventListener('resize', queueResize);
+    window.addEventListener('orientationchange', queueResize);
+    if (window.visualViewport) {
+      window.visualViewport.addEventListener('resize', queueResize);
+    }
+
+    performResize();
+  }
+
+  private setupVisibilityHandler() {
+    document.addEventListener('visibilitychange', () => {
+      if (document.hidden) {
+        audioSystem.pauseAudio?.();
+      } else {
+        this.lastTime = performance.now();
+        audioSystem.resumeAudio?.();
+      }
+    });
   }
 
   private setupInputs() {
@@ -201,16 +228,32 @@ export class GameEngine {
       this.keys[e.key.toLowerCase()] = false;
     });
 
-    this.canvas.addEventListener('mousemove', (e) => {
-      const pos = this.getScreenCoords(e.clientX, e.clientY);
+    this.canvas.addEventListener('pointermove', (e: PointerEvent) => {
+      const pos = this.getCanvasCoords(e.clientX, e.clientY);
       this.mouseWorldPos = this.camera.screenToWorld(pos.x, pos.y);
     });
 
-    this.canvas.addEventListener('mousedown', (e) => {
+    this.canvas.addEventListener('pointerdown', (e: PointerEvent) => {
       audioSystem.init();
       if (this.state !== 'PLAYING' || !this.localPlayer) return;
 
-      if (e.button === 0) {
+      const pos = this.getCanvasCoords(e.clientX, e.clientY);
+      const cssW = this.camera.viewportWidth;
+      const cssH = this.camera.viewportHeight;
+
+      // 1. Check Hotbar selection
+      const hotbarSlot = uiManager.getHotbarSlotAt(pos.x, pos.y, cssW, cssH);
+      if (hotbarSlot !== null) {
+        this.localPlayer.inventory.selectedHotbarIndex = hotbarSlot;
+        audioSystem.playUIClick();
+        this.mobileControls.triggerHaptic(15);
+        e.preventDefault();
+        return;
+      }
+
+      // 2. Primary button click or touch tap
+      if (e.button === 0 || e.pointerType === 'touch') {
+        this.mouseWorldPos = this.camera.screenToWorld(pos.x, pos.y);
         if (this.isPlacingBuilding) {
           this.confirmBuildingPlacement();
         } else {
@@ -221,42 +264,6 @@ export class GameEngine {
         domOverlay.activeBuildingGhost = null;
       }
     });
-
-    this.canvas.addEventListener('touchstart', (e: TouchEvent) => {
-      audioSystem.init();
-      if (this.state !== 'PLAYING' || !this.localPlayer) return;
-      const touch = e.touches[0];
-      if (!touch) return;
-      const pos = this.getScreenCoords(touch.clientX, touch.clientY);
-      const clientX = pos.x;
-      const clientY = pos.y;
-
-      // Check Hotbar Touch Selection
-      const slotSize = 48;
-      const gap = 8;
-      const totalW = 6 * slotSize + 5 * gap;
-      const startX = (this.canvas.width - totalW) / 2;
-      const startY = this.canvas.height - 76;
-
-      if (clientX >= startX - 8 && clientX <= startX + totalW + 8 && clientY >= startY - 8 && clientY <= startY + slotSize + 8) {
-        for (let i = 0; i < 6; i++) {
-          const sx = startX + i * (slotSize + gap);
-          if (clientX >= sx && clientX <= sx + slotSize) {
-            this.localPlayer.inventory.selectedHotbarIndex = i;
-            audioSystem.playUIClick();
-            e.preventDefault();
-            return;
-          }
-        }
-      }
-
-      // If placing building, tap confirms placement
-      if (this.isPlacingBuilding) {
-        this.mouseWorldPos = this.camera.screenToWorld(touch.clientX, touch.clientY);
-        this.confirmBuildingPlacement();
-        e.preventDefault();
-      }
-    }, { passive: false });
 
     this.canvas.addEventListener('contextmenu', (e) => e.preventDefault());
   }
@@ -822,18 +829,25 @@ export class GameEngine {
   }
 
   private render() {
-    const w = this.canvas.width;
-    const h = this.canvas.height;
+    const w = this.camera.viewportWidth;
+    const h = this.camera.viewportHeight;
+    const dpr = Math.min(window.devicePixelRatio || 1, 2);
     const ctx = this.ctx;
 
+    ctx.save();
+    ctx.scale(dpr, dpr);
     ctx.clearRect(0, 0, w, h);
 
     if (this.state === 'TITLE') {
       this.renderTitleBackground(ctx, w, h);
+      ctx.restore();
       return;
     }
 
-    if (this.state === 'LOADING') return;
+    if (this.state === 'LOADING') {
+      ctx.restore();
+      return;
+    }
 
     const levelDef = LEVEL_DEFINITIONS[this.currentLevelIndex] || LEVEL_DEFINITIONS[0];
 
@@ -842,21 +856,36 @@ export class GameEngine {
     const viewMin = this.camera.screenToWorld(0, 0);
     const viewMax = this.camera.screenToWorld(w, h);
 
+    const cullMargin = 80;
+    const minX = viewMin.x - cullMargin;
+    const maxX = viewMax.x + cullMargin;
+    const minY = viewMin.y - cullMargin;
+    const maxY = viewMax.y + cullMargin;
+
     this.tileMap.render(ctx, viewMin.x, viewMin.y, viewMax.x, viewMax.y);
     this.renderExtractionZone(ctx, levelDef);
 
     for (const b of this.buildings) {
-      b.render(ctx);
+      const bDef = BUILDING_DEFINITIONS[b.defId];
+      const bw = bDef ? bDef.width : 48;
+      const bh = bDef ? bDef.height : 48;
+      if (b.x + bw >= minX && b.x <= maxX && b.y + bh >= minY && b.y <= maxY) {
+        b.render(ctx);
+      }
     }
 
     for (const res of this.resources) {
-      res.render(ctx);
+      if (res.x + res.radius >= minX && res.x - res.radius <= maxX && res.y + res.radius >= minY && res.y - res.radius <= maxY) {
+        res.render(ctx);
+      }
     }
 
-    this.renderGroundDrops(ctx);
+    this.renderGroundDrops(ctx, minX, maxX, minY, maxY);
 
     for (const wildlife of this.wildlife) {
-      wildlife.render(ctx);
+      if (wildlife.pos.x >= minX && wildlife.pos.x <= maxX && wildlife.pos.y >= minY && wildlife.pos.y <= maxY) {
+        wildlife.render(ctx);
+      }
     }
 
     const sortedPlayers = [...this.players].sort((a, b) => a.pos.y - b.pos.y);
@@ -919,10 +948,12 @@ export class GameEngine {
         this.weather,
         this.tileMap,
         this.buildings,
-          this.survivalTime,
-          this.getNavigationTarget(levelDef)
+        this.survivalTime,
+        this.getNavigationTarget(levelDef)
       );
     }
+
+    ctx.restore();
   }
 
   private renderTitleBackground(ctx: CanvasRenderingContext2D, w: number, h: number) {
@@ -1025,8 +1056,12 @@ export class GameEngine {
     return { label: nextObjective.text, position: new Vector2(levelDef.extractionPos.x, levelDef.extractionPos.y) };
   }
 
-  private renderGroundDrops(ctx: CanvasRenderingContext2D) {
+  private renderGroundDrops(ctx: CanvasRenderingContext2D, minX?: number, maxX?: number, minY?: number, maxY?: number) {
     for (const d of this.groundDrops) {
+      if (minX !== undefined && maxX !== undefined && minY !== undefined && maxY !== undefined) {
+        if (d.x < minX || d.x > maxX || d.y < minY || d.y > maxY) continue;
+      }
+
       const def = ITEM_DEFINITIONS[d.itemId];
       const bob = Math.sin(d.bobOffset) * 4;
 

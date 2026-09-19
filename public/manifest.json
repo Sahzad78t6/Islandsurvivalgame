@@ -1,0 +1,18 @@
+{
+  "name": "ISLAND SURVIVAL",
+  "short_name": "IslandSurvival",
+  "description": "2D Top-Down Multiplayer Survival Game. Gather, craft, build shelters, and signal for rescue.",
+  "start_url": "/",
+  "display": "standalone",
+  "orientation": "landscape",
+  "background_color": "#090d16",
+  "theme_color": "#090d16",
+  "icons": [
+    {
+      "src": "/favicon.svg",
+      "sizes": "any",
+      "type": "image/svg+xml",
+      "purpose": "any maskable"
+    }
+  ]
+}
