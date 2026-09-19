@@ -1,4 +1,4 @@
-import type { LevelDefinition, CraftingRecipe } from '../types';
+﻿import type { LevelDefinition, CraftingRecipe } from '../types';
 import { Player } from '../entities/Player';
 import { LightingSystem } from '../engine/LightingSystem';
 import { WeatherSystem } from '../engine/WeatherSystem';
@@ -42,31 +42,6 @@ export class UIManager {
     }, durationMs);
   }
 
-  public getHotbarLayout(width: number, height: number) {
-    const isUltraCompact = width < 500;
-    const isCompact = width < 880;
-    const slotSize = isUltraCompact ? 36 : isCompact ? 40 : 46;
-    const gap = isUltraCompact ? 4 : isCompact ? 6 : 8;
-    const totalW = 6 * slotSize + 5 * gap;
-    const startX = (width - totalW) / 2;
-    const startY = height - (isUltraCompact ? 48 : isCompact ? 54 : 64);
-    return { slotSize, gap, totalW, startX, startY, isUltraCompact, isCompact };
-  }
-
-  public getHotbarSlotAt(screenX: number, screenY: number, width: number, height: number): number | null {
-    const { slotSize, gap, totalW, startX, startY } = this.getHotbarLayout(width, height);
-    // Generous touch padding (8px)
-    if (screenX >= startX - 8 && screenX <= startX + totalW + 8 && screenY >= startY - 8 && screenY <= startY + slotSize + 16) {
-      for (let i = 0; i < 6; i++) {
-        const sx = startX + i * (slotSize + gap);
-        if (screenX >= sx - 4 && screenX <= sx + slotSize + 4) {
-          return i;
-        }
-      }
-    }
-    return null;
-  }
-
   public renderHUD(
     ctx: CanvasRenderingContext2D,
     width: number,
@@ -82,91 +57,86 @@ export class UIManager {
     survivalTimeSeconds: number,
     navigationTarget: { label: string; position: Vector2 } | null
   ) {
-    const isUltraCompact = width < 500;
     const isCompact = width < 880;
 
     // 1. Top Left: Player Status
-    this.renderPlayerStatusHUD(ctx, localPlayer, allPlayers, isCompact, isUltraCompact);
+    this.renderPlayerStatusHUD(ctx, localPlayer, allPlayers, isCompact);
 
     // 2. Top Right: Environment & Weather
-    this.renderEnvironmentHUD(ctx, width, lighting, weather, levelDef, survivalTimeSeconds, isCompact, isUltraCompact);
+    this.renderEnvironmentHUD(ctx, width, lighting, weather, levelDef, survivalTimeSeconds, isCompact);
 
-    // 3. Right Side under Environment: Minimap
-    this.renderMinimap(ctx, width, height, localPlayer, allPlayers, levelDef, tileMap, buildings, objectiveSystem, isCompact, isUltraCompact);
+    // 3. Right Side under Environment: Minimap (Safe from hotbar and action buttons!)
+    this.renderMinimap(ctx, width, height, localPlayer, allPlayers, levelDef, tileMap, buildings, objectiveSystem, isCompact);
 
     // 4. Top Center: Objectives and Compass Waypoint
-    this.renderObjectiveHUD(ctx, width, objectiveSystem, levelDef, localPlayer, navigationTarget, isCompact, isUltraCompact);
+    this.renderObjectiveHUD(ctx, width, objectiveSystem, levelDef, localPlayer, navigationTarget, isCompact);
 
     // 5. Bottom Center: Hotbar
-    this.renderHotbarHUD(ctx, width, height, localPlayer, isCompact, isUltraCompact);
+    this.renderHotbarHUD(ctx, width, height, localPlayer, isCompact);
   }
 
-  private renderPlayerStatusHUD(ctx: CanvasRenderingContext2D, localPlayer: Player, _allPlayers: Player[], isCompact: boolean, isUltraCompact: boolean) {
+  private renderPlayerStatusHUD(ctx: CanvasRenderingContext2D, localPlayer: Player, _allPlayers: Player[], isCompact: boolean) {
     ctx.save();
-    const cardW = isUltraCompact ? 142 : isCompact ? 180 : 230;
-    const cardH = isUltraCompact ? 76 : isCompact ? 96 : 118;
-    const barW = isUltraCompact ? 76 : isCompact ? 100 : 136;
-    const startX = 10;
-    const startY = 10;
+    const cardW = isCompact ? 180 : 230;
+    const cardH = isCompact ? 96 : 118;
+    const barW = isCompact ? 100 : 136;
 
     ctx.fillStyle = 'rgba(15, 23, 42, 0.88)';
     ctx.strokeStyle = 'rgba(255, 255, 255, 0.14)';
     ctx.lineWidth = 1.5;
     ctx.beginPath();
-    ctx.roundRect(startX, startY, cardW, cardH, 6);
+    ctx.roundRect(14, 14, cardW, cardH, 8);
     ctx.fill();
     ctx.stroke();
 
     ctx.fillStyle = '#ffffff';
-    ctx.font = `bold ${isUltraCompact ? 10 : isCompact ? 12 : 13}px "Segoe UI", sans-serif`;
+    ctx.font = `bold ${isCompact ? 12 : 13}px "Segoe UI", sans-serif`;
     ctx.textAlign = 'left';
-    ctx.fillText(`${localPlayer.charClass.name}`, startX + 8, startY + (isUltraCompact ? 13 : isCompact ? 16 : 18));
+    ctx.fillText(`${localPlayer.charClass.name}`, 22, isCompact ? 30 : 34);
 
-    if (!isUltraCompact) {
-      ctx.fillStyle = localPlayer.charClass.accentColor;
-      ctx.font = 'bold 9px sans-serif';
-      ctx.fillText(localPlayer.charClass.title.toUpperCase(), startX + 8, isCompact ? 28 : 32);
-    }
+    ctx.fillStyle = localPlayer.charClass.accentColor;
+    ctx.font = 'bold 9px sans-serif';
+    ctx.fillText(localPlayer.charClass.title.toUpperCase(), 22, isCompact ? 42 : 47);
 
     const bars = [
-      { label: '❤️', val: localPlayer.stats.health, max: localPlayer.stats.maxHealth, color: '#f44336' },
-      { label: '🍖', val: localPlayer.stats.hunger, max: localPlayer.stats.maxHunger, color: '#ff9800' },
-      { label: '💧', val: localPlayer.stats.thirst, max: localPlayer.stats.maxThirst, color: '#00bcd4' },
-      { label: '⚡', val: localPlayer.stats.stamina, max: localPlayer.stats.maxStamina, color: '#4caf50' }
+      { label: '❤️ HP', val: localPlayer.stats.health, max: localPlayer.stats.maxHealth, color: '#f44336' },
+      { label: '🍖 FOOD', val: localPlayer.stats.hunger, max: localPlayer.stats.maxHunger, color: '#ff9800' },
+      { label: '💧 WATER', val: localPlayer.stats.thirst, max: localPlayer.stats.maxThirst, color: '#00bcd4' },
+      { label: '⚡ STAM', val: localPlayer.stats.stamina, max: localPlayer.stats.maxStamina, color: '#4caf50' }
     ];
 
     bars.forEach((b, i) => {
-      const by = startY + (isUltraCompact ? 20 : isCompact ? 36 : 42) + i * (isUltraCompact ? 12 : isCompact ? 13 : 16);
+      const by = (isCompact ? 48 : 55) + i * (isCompact ? 11 : 14);
       ctx.fillStyle = '#b0bec5';
-      ctx.font = `bold ${isUltraCompact ? 8 : 9}px sans-serif`;
-      ctx.fillText(b.label, startX + 6, by + (isUltraCompact ? 7 : 8));
+      ctx.font = 'bold 8px sans-serif';
+      ctx.fillText(b.label, 22, by + 7);
 
-      const barX = startX + (isUltraCompact ? 24 : isCompact ? 48 : 56);
-      const barH = isUltraCompact ? 5 : isCompact ? 6 : 8;
+      const barX = isCompact ? 70 : 82;
+      const barH = isCompact ? 6 : 8;
       ctx.fillStyle = 'rgba(0, 0, 0, 0.6)';
-      ctx.fillRect(barX, by + 1, barW, barH);
+      ctx.fillRect(barX, by, barW, barH);
 
       const ratio = Math.max(0, Math.min(1, b.val / b.max));
       ctx.fillStyle = b.color;
-      ctx.fillRect(barX, by + 1, barW * ratio, barH);
+      ctx.fillRect(barX, by, barW * ratio, barH);
     });
 
-    let badgeY = startY + cardH + 6;
+    let badgeY = cardH + 20;
     if (localPlayer.stats.hunger < 25) {
-      this.drawWarningBadge(ctx, startX, badgeY, '⚠️ LOW FOOD', '#ff9800');
-      badgeY += 16;
+      this.drawWarningBadge(ctx, 14, badgeY, '⚠️ LOW FOOD', '#ff9800');
+      badgeY += 18;
     }
     if (localPlayer.stats.thirst < 25) {
-      this.drawWarningBadge(ctx, startX, badgeY, '⚠️ DEHYDRATED', '#00bcd4');
-      badgeY += 16;
+      this.drawWarningBadge(ctx, 14, badgeY, '⚠️ DEHYDRATED', '#00bcd4');
+      badgeY += 18;
     }
     if (localPlayer.isFreezing) {
-      this.drawWarningBadge(ctx, startX, badgeY, '❄️ FREEZING', '#80d8ff');
-      badgeY += 16;
+      this.drawWarningBadge(ctx, 14, badgeY, '❄️ FREEZING', '#80d8ff');
+      badgeY += 18;
     }
     if (localPlayer.isPoisoned) {
-      this.drawWarningBadge(ctx, startX, badgeY, '☣️ POISONED', '#e040fb');
-      badgeY += 16;
+      this.drawWarningBadge(ctx, 14, badgeY, '☣️ POISONED', '#e040fb');
+      badgeY += 18;
     }
 
     ctx.restore();
@@ -175,7 +145,7 @@ export class UIManager {
   private drawWarningBadge(ctx: CanvasRenderingContext2D, x: number, y: number, text: string, color: string) {
     ctx.fillStyle = 'rgba(0, 0, 0, 0.85)';
     ctx.beginPath();
-    ctx.roundRect(x, y, 120, 14, 4);
+    ctx.roundRect(x, y, 140, 16, 4);
     ctx.fill();
     ctx.strokeStyle = color;
     ctx.lineWidth = 1;
@@ -183,7 +153,7 @@ export class UIManager {
 
     ctx.fillStyle = color;
     ctx.font = 'bold 8px sans-serif';
-    ctx.fillText(text, x + 6, y + 10);
+    ctx.fillText(text, x + 6, y + 11);
   }
 
   private renderObjectiveHUD(
@@ -193,86 +163,43 @@ export class UIManager {
     levelDef: LevelDefinition,
     player: Player,
     navigationTarget: { label: string; position: Vector2 } | null,
-    isCompact: boolean,
-    isUltraCompact: boolean
+    isCompact: boolean
   ) {
     ctx.save();
 
-    const maxBoxW = isUltraCompact ? Math.min(220, width - 200) : isCompact ? Math.min(300, width - 320) : 380;
-    if (maxBoxW < 120) {
+    // In horizontal/compact mode, render a sleek non-overlapping top center pill
+    const maxBoxW = isCompact ? Math.min(320, width - 360) : 380;
+    if (maxBoxW < 180) {
       ctx.restore();
-      return;
+      return; // Not enough horizontal space to display without collision
     }
 
     const boxX = (width - maxBoxW) / 2;
 
-    if (isCompact || isUltraCompact) {
-      const boxH = isUltraCompact ? 38 : 46;
+    if (isCompact) {
+      // Sleek single/double row compact header on mobile
+      const boxH = 46;
       ctx.fillStyle = 'rgba(15, 23, 42, 0.9)';
       ctx.strokeStyle = objSystem.isExtractionUnlocked ? '#00e5ff' : '#ffb300';
       ctx.lineWidth = 1.5;
       ctx.beginPath();
-      ctx.roundRect(boxX, 10, maxBoxW, boxH, 6);
+      ctx.roundRect(boxX, 14, maxBoxW, boxH, 8);
       ctx.fill();
       ctx.stroke();
 
       ctx.fillStyle = objSystem.isExtractionUnlocked ? '#00e5ff' : '#ffb300';
-      ctx.font = `bold ${isUltraCompact ? 9 : 10}px sans-serif`;
+      ctx.font = 'bold 10px sans-serif';
       ctx.textAlign = 'center';
-      const title = objSystem.isExtractionUnlocked ? '⚡ EXTRACTION READY' : `OBJECTIVE`;
-      ctx.fillText(title, width / 2, isUltraCompact ? 22 : 25);
+      const title = objSystem.isExtractionUnlocked ? '⚡ EXTRACTION READY' : `OBJECTIVE: ${levelDef.name.split('—')[1] || levelDef.name}`;
+      ctx.fillText(title, width / 2, 28);
 
       if (navigationTarget) {
         const delta = navigationTarget.position.sub(player.pos);
         const distance = Math.round(delta.length());
         const angle = Math.atan2(delta.y, delta.x);
 
-        const arrowX = boxX + 14;
-        const arrowY = isUltraCompact ? 29 : 35;
-        ctx.save();
-        ctx.translate(arrowX, arrowY);
-        ctx.rotate(angle + Math.PI / 2);
-        ctx.fillStyle = '#ffca28';
-        ctx.beginPath();
-        ctx.moveTo(0, -5);
-        ctx.lineTo(3, 4);
-        ctx.lineTo(0, 2);
-        ctx.lineTo(-3, 4);
-        ctx.closePath();
-        ctx.fill();
-        ctx.restore();
-
-        ctx.fillStyle = '#ffd54f';
-        ctx.font = 'bold 8px sans-serif';
-        ctx.textAlign = 'left';
-        const navText = `${navigationTarget.label} (${distance}m)`;
-        ctx.fillText(navText.length > 26 ? navText.slice(0, 24) + '...' : navText, boxX + 22, isUltraCompact ? 32 : 38);
-      }
-    } else {
-      const boxH = 74 + Math.min(objSystem.objectives.length, 4) * 16;
-      ctx.fillStyle = 'rgba(15, 23, 42, 0.88)';
-      ctx.strokeStyle = objSystem.isExtractionUnlocked ? '#00e5ff' : 'rgba(255, 255, 255, 0.12)';
-      ctx.lineWidth = 1.5;
-      ctx.beginPath();
-      ctx.roundRect(boxX, 12, maxBoxW, boxH, 8);
-      ctx.fill();
-      ctx.stroke();
-
-      ctx.fillStyle = objSystem.isExtractionUnlocked ? '#00e5ff' : '#ffb300';
-      ctx.font = 'bold 11px sans-serif';
-      ctx.textAlign = 'center';
-      ctx.fillText(
-        objSystem.isExtractionUnlocked ? '⚡ REACH EXTRACTION POINT' : `OBJECTIVES: ${levelDef.name}`,
-        width / 2,
-        28
-      );
-
-      if (navigationTarget) {
-        const delta = navigationTarget.position.sub(player.pos);
-        const distance = Math.round(delta.length());
-        const angle = Math.atan2(delta.y, delta.x);
-        const arrowX = boxX + 20;
-        const arrowY = 44;
+        const arrowX = boxX + 18;
+        const arrowY = 40;
         ctx.save();
         ctx.translate(arrowX, arrowY);
         ctx.rotate(angle + Math.PI / 2);
@@ -286,15 +213,60 @@ export class UIManager {
         ctx.fill();
         ctx.restore();
 
+        ctx.fillStyle = '#ffd54f';
+        ctx.font = 'bold 9px sans-serif';
+        ctx.textAlign = 'left';
+        const navText = `${navigationTarget.label} (${distance}m)`;
+        ctx.fillText(navText.length > 34 ? navText.slice(0, 32) + '...' : navText, boxX + 28, 43);
+      }
+    } else {
+      // Full widescreen objectives box
+      const boxH = 74 + Math.min(objSystem.objectives.length, 4) * 16;
+      ctx.fillStyle = 'rgba(15, 23, 42, 0.88)';
+      ctx.strokeStyle = objSystem.isExtractionUnlocked ? '#00e5ff' : 'rgba(255, 255, 255, 0.12)';
+      ctx.lineWidth = 1.5;
+      ctx.beginPath();
+      ctx.roundRect(boxX, 14, maxBoxW, boxH, 8);
+      ctx.fill();
+      ctx.stroke();
+
+      ctx.fillStyle = objSystem.isExtractionUnlocked ? '#00e5ff' : '#ffb300';
+      ctx.font = 'bold 11px sans-serif';
+      ctx.textAlign = 'center';
+      ctx.fillText(
+        objSystem.isExtractionUnlocked ? '⚡ REACH EXTRACTION POINT' : `OBJECTIVES: ${levelDef.name}`,
+        width / 2,
+        30
+      );
+
+      if (navigationTarget) {
+        const delta = navigationTarget.position.sub(player.pos);
+        const distance = Math.round(delta.length());
+        const angle = Math.atan2(delta.y, delta.x);
+        const arrowX = boxX + 24;
+        const arrowY = 46;
+        ctx.save();
+        ctx.translate(arrowX, arrowY);
+        ctx.rotate(angle + Math.PI / 2);
+        ctx.fillStyle = '#ffca28';
+        ctx.beginPath();
+        ctx.moveTo(0, -7);
+        ctx.lineTo(5, 6);
+        ctx.lineTo(0, 3);
+        ctx.lineTo(-5, 6);
+        ctx.closePath();
+        ctx.fill();
+        ctx.restore();
+
         ctx.fillStyle = '#ffca28';
         ctx.font = 'bold 9px sans-serif';
         ctx.textAlign = 'left';
-        ctx.fillText(`WAYPOINT: ${navigationTarget.label} | ${distance}m`, boxX + 32, 47);
+        ctx.fillText(`WAYPOINT: ${navigationTarget.label} | ${distance}m`, boxX + 36, 49);
       }
 
       ctx.font = '10px "Segoe UI", sans-serif';
       objSystem.objectives.slice(0, 4).forEach((obj, idx) => {
-        const oy = 64 + idx * 16;
+        const oy = 66 + idx * 16;
         ctx.fillStyle = obj.completed ? '#81c784' : '#cfd8dc';
         const icon = obj.completed ? '✅' : '⬜';
         const progress = obj.type === 'REACH' ? '' : ` (${obj.currentCount}/${obj.targetCount})`;
@@ -312,33 +284,31 @@ export class UIManager {
     weather: WeatherSystem,
     _levelDef: LevelDefinition,
     survivalTimeSeconds: number,
-    isCompact: boolean,
-    isUltraCompact: boolean
+    isCompact: boolean
   ) {
     ctx.save();
-    const boxW = isUltraCompact ? 90 : isCompact ? 116 : 144;
-    const boxH = isUltraCompact ? 36 : isCompact ? 44 : 50;
-    const boxX = width - boxW - 10;
-    const boxY = 10;
+    const boxW = isCompact ? 120 : 150;
+    const boxH = isCompact ? 46 : 52;
+    const boxX = width - boxW - 14;
 
     ctx.fillStyle = 'rgba(15, 23, 42, 0.88)';
     ctx.strokeStyle = 'rgba(255, 255, 255, 0.12)';
     ctx.lineWidth = 1.5;
     ctx.beginPath();
-    ctx.roundRect(boxX, boxY, boxW, boxH, 6);
+    ctx.roundRect(boxX, 14, boxW, boxH, 8);
     ctx.fill();
     ctx.stroke();
 
     ctx.fillStyle = '#ffffff';
-    ctx.font = `bold ${isUltraCompact ? 9 : isCompact ? 10 : 11}px monospace`;
+    ctx.font = `bold ${isCompact ? 10 : 11}px monospace`;
     ctx.textAlign = 'right';
-    ctx.fillText(`🕒 ${lighting.getTimeString()}`, width - 16, boxY + (isUltraCompact ? 13 : 15));
+    ctx.fillText(`🕒 ${lighting.getTimeString()}`, width - 22, 29);
 
     const mins = Math.floor(survivalTimeSeconds / 60);
     const secs = Math.floor(survivalTimeSeconds % 60);
     ctx.fillStyle = '#ffca28';
-    ctx.font = `bold ${isUltraCompact ? 8 : 9}px monospace`;
-    ctx.fillText(`${weather.currentWeather} ${mins}:${secs.toString().padStart(2, '0')}`, width - 16, boxY + (isUltraCompact ? 28 : 34));
+    ctx.font = `bold ${isCompact ? 9 : 10}px monospace`;
+    ctx.fillText(`${weather.currentWeather} | ${mins}:${secs.toString().padStart(2, '0')}`, width - 22, isCompact ? 48 : 53);
 
     ctx.restore();
   }
@@ -348,37 +318,40 @@ export class UIManager {
     width: number,
     height: number,
     player: Player,
-    isCompact: boolean,
-    isUltraCompact: boolean
+    isCompact: boolean
   ) {
     ctx.save();
 
     if (this.promptText) {
-      ctx.fillStyle = 'rgba(10, 15, 25, 0.94)';
+      ctx.fillStyle = 'rgba(10, 15, 25, 0.92)';
       ctx.strokeStyle = '#ffb300';
       ctx.lineWidth = 1.5;
-      const pWidth = Math.min(width - 24, ctx.measureText(this.promptText).width + 32);
+      const pWidth = Math.min(width - 40, ctx.measureText(this.promptText).width + 36);
       const px = (width - pWidth) / 2;
-      const py = height - (isUltraCompact ? 76 : isCompact ? 86 : 106);
+      const py = height - (isCompact ? 86 : 108);
 
       ctx.beginPath();
-      ctx.roundRect(px, py, pWidth, isUltraCompact ? 22 : 26, 6);
+      ctx.roundRect(px, py, pWidth, 26, 6);
       ctx.fill();
       ctx.stroke();
 
       ctx.fillStyle = '#ffffff';
-      ctx.font = `bold ${isUltraCompact ? 10 : isCompact ? 11 : 12}px "Segoe UI", sans-serif`;
+      ctx.font = `bold ${isCompact ? 11 : 12}px "Segoe UI", sans-serif`;
       ctx.textAlign = 'center';
-      ctx.fillText(this.promptText, width / 2, py + (isUltraCompact ? 15 : 17));
+      ctx.fillText(this.promptText, width / 2, py + 17);
     }
 
-    const { slotSize, gap, totalW, startX, startY } = this.getHotbarLayout(width, height);
+    const slotSize = isCompact ? 40 : 46;
+    const gap = isCompact ? 6 : 8;
+    const totalW = 6 * slotSize + 5 * gap;
+    const startX = (width - totalW) / 2;
+    const startY = height - (isCompact ? 54 : 64);
 
     ctx.fillStyle = 'rgba(15, 23, 42, 0.92)';
     ctx.strokeStyle = 'rgba(255, 255, 255, 0.15)';
     ctx.lineWidth = 1.5;
     ctx.beginPath();
-    ctx.roundRect(startX - 6, startY - 4, totalW + 12, slotSize + 8, 6);
+    ctx.roundRect(startX - 8, startY - 6, totalW + 16, slotSize + 12, 8);
     ctx.fill();
     ctx.stroke();
 
@@ -394,23 +367,23 @@ export class UIManager {
       ctx.strokeRect(sx, startY, slotSize, slotSize);
 
       ctx.fillStyle = isSelected ? '#ffb300' : '#90a4ae';
-      ctx.font = `bold ${isUltraCompact ? 8 : 9}px monospace`;
+      ctx.font = 'bold 9px monospace';
       ctx.textAlign = 'left';
-      ctx.fillText(`${i + 1}`, sx + 2, startY + (isUltraCompact ? 8 : 10));
+      ctx.fillText(`${i + 1}`, sx + 3, startY + 10);
 
       const stack = player.inventory.slots[i];
       if (stack) {
         const def = ITEM_DEFINITIONS[stack.itemId];
         if (def) {
-          ctx.font = `${isUltraCompact ? 16 : isCompact ? 18 : 22}px serif`;
+          ctx.font = `${isCompact ? 18 : 22}px serif`;
           ctx.textAlign = 'center';
-          ctx.fillText(def.iconSymbol, sx + slotSize / 2, startY + slotSize / 2 + (isUltraCompact ? 4 : isCompact ? 5 : 7));
+          ctx.fillText(def.iconSymbol, sx + slotSize / 2, startY + slotSize / 2 + (isCompact ? 5 : 7));
 
           if (stack.quantity > 1) {
             ctx.fillStyle = '#ffffff';
-            ctx.font = `bold ${isUltraCompact ? 8 : 9}px monospace`;
+            ctx.font = 'bold 9px monospace';
             ctx.textAlign = 'right';
-            ctx.fillText(`${stack.quantity}`, sx + slotSize - 2, startY + slotSize - 2);
+            ctx.fillText(`${stack.quantity}`, sx + slotSize - 3, startY + slotSize - 3);
           }
         }
       }
@@ -429,25 +402,26 @@ export class UIManager {
     tileMap: TileMap,
     buildings: BuildingInstance[],
     objSystem: ObjectiveSystem,
-    isCompact: boolean,
-    isUltraCompact: boolean
+    isCompact: boolean
   ) {
     ctx.save();
-    const mapSize = isUltraCompact ? 68 : isCompact ? 84 : 110;
-    const mx = width - mapSize - 10;
-    const my = isUltraCompact ? 50 : isCompact ? 58 : 66;
+    // In horizontal mode, place minimap underneath Environment HUD on top-right!
+    // This leaves the bottom completely clear for Hotbar and Action Buttons!
+    const mapSize = isCompact ? 96 : 115;
+    const mx = width - mapSize - 14;
+    const my = isCompact ? 68 : 74;
 
     ctx.fillStyle = 'rgba(10, 15, 25, 0.88)';
     ctx.strokeStyle = 'rgba(255, 255, 255, 0.2)';
     ctx.lineWidth = 1.5;
     ctx.beginPath();
-    ctx.roundRect(mx, my, mapSize, mapSize, 6);
+    ctx.roundRect(mx, my, mapSize, mapSize, 8);
     ctx.fill();
     ctx.stroke();
 
     ctx.save();
     ctx.beginPath();
-    ctx.roundRect(mx + 2, my + 2, mapSize - 4, mapSize - 4, 4);
+    ctx.roundRect(mx + 2, my + 2, mapSize - 4, mapSize - 4, 6);
     ctx.clip();
 
     const worldW = tileMap.width * 32;
@@ -467,7 +441,7 @@ export class UIManager {
     const pGlow = Math.sin(Date.now() * 0.008) * 1.5;
     ctx.fillStyle = objSystem.isExtractionUnlocked ? '#00e5ff' : '#ffd54f';
     ctx.beginPath();
-    ctx.arc(ex, ey, 3 + pGlow, 0, Math.PI * 2);
+    ctx.arc(ex, ey, 3.5 + pGlow, 0, Math.PI * 2);
     ctx.fill();
 
     for (const tm of allPlayers) {
@@ -476,7 +450,7 @@ export class UIManager {
         const ty = my + 4 + tm.pos.y * scaleY;
         ctx.fillStyle = tm.stats.isDowned ? '#ff1744' : tm.charClass.accentColor;
         ctx.beginPath();
-        ctx.arc(tx, ty, 2, 0, Math.PI * 2);
+        ctx.arc(tx, ty, 2.5, 0, Math.PI * 2);
         ctx.fill();
       }
     }
@@ -485,15 +459,15 @@ export class UIManager {
     const py = my + 4 + player.pos.y * scaleY;
     ctx.fillStyle = '#ffffff';
     ctx.beginPath();
-    ctx.arc(px, py, 2.5, 0, Math.PI * 2);
+    ctx.arc(px, py, 3, 0, Math.PI * 2);
     ctx.fill();
 
     ctx.restore();
 
     ctx.fillStyle = '#90a4ae';
-    ctx.font = `bold ${isUltraCompact ? 7 : 8}px monospace`;
+    ctx.font = 'bold 8px monospace';
     ctx.textAlign = 'left';
-    ctx.fillText('MAP', mx + 4, my + 9);
+    ctx.fillText('MINIMAP', mx + 5, my + 11);
 
     ctx.restore();
   }

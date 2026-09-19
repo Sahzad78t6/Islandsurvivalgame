@@ -12,7 +12,6 @@ export class DOMOverlay {
   private container: HTMLElement;
   private selectedInventorySlot: number | null = null;
   public activeBuildingGhost: string | null = null;
-  public mobileControls: any = null;
 
   public onLogin: (saveData: any) => void = () => {};
   public onLogout: () => void = () => {};
@@ -182,7 +181,7 @@ export class DOMOverlay {
 
     document.getElementById('btn-settings')?.addEventListener('click', () => {
       audioSystem.playUIClick();
-      this.renderSettingsModal(this.mobileControls);
+      this.renderSettingsModal();
     });
 
     document.getElementById('btn-credits')?.addEventListener('click', () => {
@@ -406,7 +405,6 @@ export class DOMOverlay {
   ) {
     let currentTab: 'SURVIVAL' | 'TOOLS' | 'EQUIPMENT' | 'ADVANCED' = 'SURVIVAL';
     let selectedRecipeId: string = CRAFTING_RECIPES[0].id;
-    let mobileViewSection: 'BACKPACK' | 'CRAFTING' = 'BACKPACK';
 
     const render = () => {
       const selectedRecipe = CRAFTING_RECIPES.find(r => r.id === selectedRecipeId) || CRAFTING_RECIPES[0];
@@ -420,16 +418,10 @@ export class DOMOverlay {
           <div class="modal-card dual-panel-modal">
             <div class="modal-header">
               <h2>INVENTORY & FIELD CRAFTING</h2>
-              <button class="btn-close" id="btn-close-inv" aria-label="Close">✕</button>
+              <button class="btn-close" id="btn-close-inv">✕</button>
             </div>
 
-            <!-- Mobile View Switcher Tabs -->
-            <div class="mobile-dual-switcher">
-              <button class="switcher-btn ${mobileViewSection === 'BACKPACK' ? 'active' : ''}" id="switch-to-backpack">🎒 BACKPACK</button>
-              <button class="switcher-btn ${mobileViewSection === 'CRAFTING' ? 'active' : ''}" id="switch-to-crafting">⚒️ CRAFTING</button>
-            </div>
-
-            <div class="dual-body ${mobileViewSection === 'CRAFTING' ? 'show-crafting-mobile' : 'show-backpack-mobile'}">
+            <div class="dual-body">
               <div class="panel-section inv-section">
                 <div class="section-title-bar">
                   <h3>SURVIVOR BACKPACK</h3>
@@ -469,7 +461,7 @@ export class DOMOverlay {
                       <button class="btn btn-sm btn-danger" id="btn-drop-item">DROP ON GROUND</button>
                     </div>
                   ` : `
-                    <div class="no-selection">Tap an item to inspect, consume, or drop.</div>
+                    <div class="no-selection">Select an item to inspect, consume, or drop.</div>
                   `}
                 </div>
               </div>
@@ -529,18 +521,6 @@ export class DOMOverlay {
 
       document.getElementById('btn-close-inv')?.addEventListener('click', () => this.clear());
       
-      document.getElementById('switch-to-backpack')?.addEventListener('click', () => {
-        mobileViewSection = 'BACKPACK';
-        audioSystem.playUIClick();
-        render();
-      });
-
-      document.getElementById('switch-to-crafting')?.addEventListener('click', () => {
-        mobileViewSection = 'CRAFTING';
-        audioSystem.playUIClick();
-        render();
-      });
-
       this.container.querySelectorAll('.inv-slot').forEach(el => {
         el.addEventListener('click', () => {
           const slotIdx = parseInt(el.getAttribute('data-slot') || '0', 10);
@@ -776,24 +756,16 @@ export class DOMOverlay {
     });
   }
 
-  public renderSettingsModal(mobileControls?: any) {
-    const touchSettings = mobileControls?.settings || {
-      joystickSize: 'medium',
-      opacity: 0.85,
-      leftHanded: false,
-      haptics: true
-    };
-
+  public renderSettingsModal() {
     this.container.innerHTML = `
       <div class="screen-overlay modal-backdrop">
         <div class="modal-card settings-modal">
           <div class="modal-header">
-            <h2>SETTINGS & PREFERENCES</h2>
-            <button class="btn-close" id="btn-close-settings" aria-label="Close">✕</button>
+            <h2>AUDIO & ACCESSIBILITY SETTINGS</h2>
+            <button class="btn-close" id="btn-close-settings">✕</button>
           </div>
 
           <div class="settings-rows">
-            <h3 class="settings-section-title">🔊 AUDIO SETTINGS</h3>
             <div class="setting-row">
               <label>Master Volume:</label>
               <input type="range" id="vol-master" min="0" max="1" step="0.05" value="0.8">
@@ -810,44 +782,18 @@ export class DOMOverlay {
               <label>Mute All Audio:</label>
               <button class="btn btn-sm btn-secondary" id="btn-toggle-mute">Toggle Mute</button>
             </div>
-
-            <h3 class="settings-section-title" style="margin-top: 14px;">📱 TOUCH & MOBILE CONTROLS</h3>
-            <div class="setting-row">
-              <label>Joystick Size:</label>
-              <select id="setting-joy-size" class="input-select">
-                <option value="small" ${touchSettings.joystickSize === 'small' ? 'selected' : ''}>Small (Compact)</option>
-                <option value="medium" ${touchSettings.joystickSize === 'medium' ? 'selected' : ''}>Medium (Standard)</option>
-                <option value="large" ${touchSettings.joystickSize === 'large' ? 'selected' : ''}>Large (Comfort)</option>
-              </select>
-            </div>
-            <div class="setting-row">
-              <label>Control Opacity:</label>
-              <input type="range" id="setting-touch-opacity" min="0.3" max="1.0" step="0.05" value="${touchSettings.opacity}">
-            </div>
-            <div class="setting-row">
-              <label>Left-Handed Mode:</label>
-              <button class="btn btn-sm ${touchSettings.leftHanded ? 'btn-primary' : 'btn-secondary'}" id="btn-toggle-lefthanded">
-                ${touchSettings.leftHanded ? 'ON (Flipped Controls)' : 'OFF (Standard)'}
-              </button>
-            </div>
-            <div class="setting-row">
-              <label>Haptic Feedback (Vibration):</label>
-              <button class="btn btn-sm ${touchSettings.haptics ? 'btn-primary' : 'btn-secondary'}" id="btn-toggle-haptics">
-                ${touchSettings.haptics ? 'ON ✅' : 'OFF ❌'}
-              </button>
-            </div>
           </div>
 
           <div class="controls-guide">
             <h4>CONTROLS QUICK REFERENCE</h4>
             <ul>
-              <li><strong>WASD / Arrow Keys / Virtual Joystick</strong>: 8-Direction Movement</li>
-              <li><strong>Left Shift / Sprint Button</strong>: Sprint (Uses Stamina)</li>
-              <li><strong>E / Tap [USE]</strong>: Interact / Harvest / Drink / Revive Teammate</li>
-              <li><strong>1 - 6 / Tap Hotbar Slots</strong>: Quick Hotbar Item Selection</li>
-              <li><strong>Tab / I / Tap [BAG]</strong>: Open Inventory & Field Crafting</li>
-              <li><strong>B / Tap [BUILD]</strong>: Open Building Placement Menu</li>
-              <li><strong>Esc / Close Button</strong>: Close Modals / Pause</li>
+              <li><strong>WASD / Arrow Keys</strong>: 8-Direction Movement</li>
+              <li><strong>Left Shift</strong>: Sprint (Uses Stamina)</li>
+              <li><strong>E</strong>: Interact / Harvest / Drink / Revive Teammate</li>
+              <li><strong>1 - 6</strong>: Quick Hotbar Item Selection</li>
+              <li><strong>Tab / I</strong>: Open Inventory & Field Crafting</li>
+              <li><strong>B</strong>: Open Building Placement Menu</li>
+              <li><strong>Esc</strong>: Close Modals / Pause</li>
             </ul>
           </div>
 
@@ -877,60 +823,6 @@ export class DOMOverlay {
     m?.addEventListener('input', updateVols);
     s?.addEventListener('input', updateVols);
     mu?.addEventListener('input', updateVols);
-
-    // Mobile controls bindings
-    const joySelect = document.getElementById('setting-joy-size') as HTMLSelectElement;
-    joySelect?.addEventListener('change', () => {
-      mobileControls?.saveSettings({ joystickSize: joySelect.value as any });
-      audioSystem.playUIClick();
-    });
-
-    const opSlider = document.getElementById('setting-touch-opacity') as HTMLInputElement;
-    opSlider?.addEventListener('input', () => {
-      mobileControls?.saveSettings({ opacity: parseFloat(opSlider.value) });
-    });
-
-    const leftBtn = document.getElementById('btn-toggle-lefthanded');
-    leftBtn?.addEventListener('click', () => {
-      if (mobileControls) {
-        const next = !mobileControls.settings.leftHanded;
-        mobileControls.saveSettings({ leftHanded: next });
-        audioSystem.playUIClick();
-        this.renderSettingsModal(mobileControls);
-      }
-    });
-
-    const hapBtn = document.getElementById('btn-toggle-haptics');
-    hapBtn?.addEventListener('click', () => {
-      if (mobileControls) {
-        const next = !mobileControls.settings.haptics;
-        mobileControls.saveSettings({ haptics: next });
-        if (next) mobileControls.triggerHaptic(25);
-        audioSystem.playUIClick();
-        this.renderSettingsModal(mobileControls);
-      }
-    });
-  }
-
-  public renderOrientationPrompt(onDismiss: () => void) {
-    this.container.innerHTML = `
-      <div class="screen-overlay mobile-rotate-overlay">
-        <div class="rotate-card">
-          <div class="rotate-anim-icon">🔄</div>
-          <h2>LANDSCAPE RECOMMENDED</h2>
-          <p>For the widest survival field of view and comfortable two-thumb controls, please rotate your device to landscape mode.</p>
-          <div class="modal-footer center" style="flex-direction: column; gap: 8px;">
-            <button class="btn btn-primary btn-large" id="btn-dismiss-rotate">PLAY IN PORTRAIT ANYWAY ▶</button>
-          </div>
-        </div>
-      </div>
-    `;
-
-    document.getElementById('btn-dismiss-rotate')?.addEventListener('click', () => {
-      audioSystem.playUIClick();
-      this.clear();
-      onDismiss();
-    });
   }
 
   public renderHowToPlay() {
